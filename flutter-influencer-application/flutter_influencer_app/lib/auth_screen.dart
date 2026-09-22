@@ -1,0 +1,477 @@
+import 'package:flutter/material.dart';
+
+import 'api_service.dart';
+import 'influencer_dashboard.dart';
+
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  bool _isRegisterMode = false;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  // ------------------------------------------------------------
+  // LOGIN
+  // ------------------------------------------------------------
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your email and password.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.authenticate(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const InfluencerDashboard(),
+          ),
+        );
+      } else {
+        setState(() {
+          _errorMessage =
+              result['error']?.toString() ?? 'Login failed.';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = 'Connection failed: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------
+  // REGISTER
+  // ------------------------------------------------------------
+
+  Future<void> _register() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (name.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your name.';
+      });
+      return;
+    }
+
+    if (email.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your email address.';
+      });
+      return;
+    }
+
+    if (password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter a password.';
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      setState(() {
+        _errorMessage = 'Password must be at least 6 characters.';
+      });
+      return;
+    }
+
+    if (password != confirmPassword) {
+      setState(() {
+        _errorMessage = 'Passwords do not match.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.register(
+        name: name,
+        email: email,
+        password: password,
+        role: 'creator',
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        // Switch back to login screen.
+        setState(() {
+          _isRegisterMode = false;
+          _isLoading = false;
+          _passwordController.clear();
+          _confirmPasswordController.clear();
+          _errorMessage = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Registration successful. Please sign in.',
+            ),
+          ),
+        );
+      } else {
+        setState(() {
+          _errorMessage =
+              result['error']?.toString() ?? 'Registration failed.';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = 'Connection failed: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------
+  // SWITCH LOGIN / REGISTER
+  // ------------------------------------------------------------
+
+  void _switchMode() {
+    setState(() {
+      _isRegisterMode = !_isRegisterMode;
+      _errorMessage = null;
+    });
+  }
+
+  // ------------------------------------------------------------
+  // DISPOSE
+  // ------------------------------------------------------------
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+
+    super.dispose();
+  }
+
+  // ------------------------------------------------------------
+  // UI
+  // ------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 420,
+              ),
+              child: Column(
+                children: [
+                  // ------------------------------------------------
+                  // LOGO
+                  // ------------------------------------------------
+
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Colors.lightBlue,
+                          Colors.indigo,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.link,
+                        size: 36,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'Rmworkz',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  const Text(
+                    'INFLUENCER PLATFORM',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.lightBlue,
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // ------------------------------------------------
+                  // FORM CARD
+                  // ------------------------------------------------
+
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white10,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _isRegisterMode
+                                ? 'Create Influencer Account'
+                                : 'Influencer Sign In',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // ------------------------------------------------
+                        // ERROR
+                        // ------------------------------------------------
+
+                        if (_errorMessage != null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(
+                              bottom: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(
+                                alpha: 0.15,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // NAME - REGISTER ONLY
+                        // ------------------------------------------------
+
+                        if (_isRegisterMode) ...[
+                          TextField(
+                            controller: _nameController,
+                            textInputAction:
+                                TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Full Name',
+                              prefixIcon:
+                                  Icon(Icons.person_outline),
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+                        ],
+
+                        // ------------------------------------------------
+                        // EMAIL
+                        // ------------------------------------------------
+
+                        TextField(
+                          controller: _emailController,
+                          keyboardType:
+                              TextInputType.emailAddress,
+                          textInputAction:
+                              TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Email Address',
+                            prefixIcon:
+                                Icon(Icons.email_outlined),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ------------------------------------------------
+                        // PASSWORD
+                        // ------------------------------------------------
+
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          textInputAction: _isRegisterMode
+                              ? TextInputAction.next
+                              : TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon:
+                                Icon(Icons.lock_outline),
+                          ),
+                        ),
+
+                        // ------------------------------------------------
+                        // CONFIRM PASSWORD
+                        // ------------------------------------------------
+
+                        if (_isRegisterMode) ...[
+                          const SizedBox(height: 16),
+
+                          TextField(
+                            controller:
+                                _confirmPasswordController,
+                            obscureText: true,
+                            textInputAction:
+                                TextInputAction.done,
+                            decoration: const InputDecoration(
+                              labelText: 'Confirm Password',
+                              prefixIcon: Icon(
+                                Icons.lock_outline,
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 24),
+
+                        // ------------------------------------------------
+                        // MAIN BUTTON
+                        // ------------------------------------------------
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _isLoading
+                                ? null
+                                : (_isRegisterMode
+                                    ? _register
+                                    : _login),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child:
+                                        CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    _isRegisterMode
+                                        ? 'Create Account'
+                                        : 'Sign In',
+                                    style: const TextStyle(
+                                      fontWeight:
+                                          FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // ------------------------------------------------
+                        // SWITCH LOGIN / REGISTER
+                        // ------------------------------------------------
+
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _isRegisterMode
+                                  ? 'Already have an account?'
+                                  : "Don't have an account?",
+                              style: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                            ),
+
+                            TextButton(
+                              onPressed:
+                                  _isLoading ? null : _switchMode,
+                              child: Text(
+                                _isRegisterMode
+                                    ? 'Sign In'
+                                    : 'Create Account',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

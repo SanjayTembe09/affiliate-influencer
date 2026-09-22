@@ -1,0 +1,4970 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'api_service.dart';
+import 'auth_screen.dart';
+import 'marketplace_product_details_screen.dart';
+import 'product_post_screen.dart';
+
+class InfluencerDashboard extends StatefulWidget {
+  const InfluencerDashboard({super.key});
+
+  @override
+  State<InfluencerDashboard> createState() =>
+      _InfluencerDashboardState();
+}
+
+class _InfluencerDashboardState extends State<InfluencerDashboard> {
+  bool _isLoading = true;
+
+  String? _errorMessage;
+
+  List<dynamic> _campaigns = [];
+  List<dynamic> _submissions = [];
+
+  // ============================================================
+  // MARKETPLACE PRODUCTS
+  // ============================================================
+
+  List<dynamic> _marketplaceProducts = [];
+  Map<String, dynamic>? _selectedMarketplaceProduct;
+  bool _isLoadingMarketplaceProducts = false;
+  final int _marketplacePageLimit = 10;
+
+  int _marketplacePage = 1;
+  int _marketplaceTotalPages = 1;
+  int _marketplaceTotalProducts = 0;
+  bool _isChangingMarketplacePage = false;
+
+// ============================================================
+// AFFILIATE OFFERS
+// ============================================================
+
+List<dynamic> _affiliateOffers = [];
+
+bool _isLoadingAffiliateOffers = false;
+bool _isChangingAffiliateOfferPage = false;
+
+int _affiliateOfferPage = 1;
+int _affiliateOfferTotalPages = 1;
+int _affiliateOfferTotal = 0;
+
+final int _affiliateOfferPageLimit = 10;
+
+
+  // ============================================================
+  // AFFILIATE PROGRAMS
+  // ============================================================
+
+  List<dynamic> _affiliatePrograms = [];
+
+  // program_id -> membership status
+  Map<int, String> _affiliateProgramStatuses = {};
+
+  bool _isLoadingAffiliatePrograms = false;
+  bool _isChangingAffiliateProgramPage = false;
+
+  int _affiliateProgramPage = 1;
+  int _affiliateProgramTotalPages = 1;
+  int _affiliateProgramTotal = 0;
+
+  final int _affiliateProgramPageLimit = 10;
+
+  List<dynamic> _myAffiliatePrograms = [];
+
+// ============================================================
+// AFFILIATE EARNINGS
+// ============================================================
+
+  double _affiliateTotalEarned = 0;
+  double _affiliatePending = 0;
+  double _affiliateAvailable = 0;
+  double _affiliatePaid = 0;
+  String _affiliateCurrency = 'INR';
+  bool _isLoadingAffiliateEarnings = false;
+
+  String _creatorName = 'Creator';
+
+  // ============================================================
+  // COMPLETE STATISTICS
+  // These values are independent of pagination.
+  // ============================================================
+
+  int _totalCampaigns = 0;
+  int _totalSubmissions = 0;
+  double _totalEarnings = 0;
+
+  // ============================================================
+  // PAGINATION
+  // ============================================================
+
+  final int _pageLimit = 10;
+
+  int _campaignPage = 1;
+  int _campaignTotalPages = 1;
+  bool _isChangingCampaignPage = false;
+
+  int _submissionPage = 1;
+  int _submissionTotalPages = 1;
+  bool _isChangingSubmissionPage = false;
+
+  // ============================================================
+  // INIT STATE
+  // ============================================================
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadDashboard();
+    _loadMarketplaceProducts();
+    _loadAffiliateOffers();
+    _loadAffiliatePrograms();
+    _loadAffiliateEarnings();
+  }
+
+  // ============================================================
+  // REFRESH ALL DASHBOARD DATA
+  // ============================================================
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _loadDashboard(),
+      _loadMarketplaceProducts(),
+       _loadAffiliateOffers(),
+      _loadAffiliatePrograms(),
+      _loadAffiliateEarnings(),
+    ]);
+  }
+
+  // ============================================================
+  // LOAD MARKETPLACE PRODUCTS
+  // ============================================================
+
+  Future<void> _loadMarketplaceProducts({
+    int page = 1,
+  }) async {
+    if (page < 1 || page > _marketplaceTotalPages) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMarketplaceProducts = true;
+      _isChangingMarketplacePage = true;
+    });
+
+    try {
+      final result =
+          await ApiService.getMarketplaceProducts(
+        page: page,
+        limit: _marketplacePageLimit,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _marketplaceProducts =
+            List<dynamic>.from(result['products'] ?? []);
+
+        _marketplacePage =
+            (result['page'] as num?)?.toInt() ?? page;
+
+        _marketplaceTotalPages =
+            (result['total_pages'] as num?)?.toInt() ?? 1;
+
+        _marketplaceTotalProducts =
+            (result['total'] as num?)?.toInt() ?? 0;
+
+        _isLoadingMarketplaceProducts = false;
+        _isChangingMarketplacePage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingMarketplaceProducts = false;
+        _isChangingMarketplacePage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load marketplace products: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+// ============================================================
+// LOAD AFFILIATE OFFERS
+// ============================================================
+
+Future<void> _loadAffiliateOffers({
+  int page = 1,
+  }) async {
+  if (page < 1 || page > _affiliateOfferTotalPages) {
+  return;
+  }
+
+  setState(() {
+    _isLoadingAffiliateOffers = true;
+    _isChangingAffiliateOfferPage = true;
+  });
+
+  try {
+    final result =
+        await ApiService.getAffiliateOffers(
+      page: page,
+      limit: _affiliateOfferPageLimit,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _affiliateOffers =
+          List<dynamic>.from(
+        result['offers'] ?? [],
+      );
+
+      _affiliateOfferPage =
+          (result['page'] as num?)?.toInt() ?? page;
+
+      _affiliateOfferTotalPages =
+          (result['total_pages'] as num?)?.toInt() ?? 1;
+
+      _affiliateOfferTotal =
+          (result['total'] as num?)?.toInt() ?? 0;
+
+      _isLoadingAffiliateOffers = false;
+      _isChangingAffiliateOfferPage = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingAffiliateOffers = false;
+      _isChangingAffiliateOfferPage = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Failed to load affiliate offers: $e',
+        ),
+      ),
+    );
+  }
+}
+
+
+  // ============================================================
+  // CREATE SOCIAL PUBLISHER PRODUCT POST
+  // ============================================================
+
+  /*Future<void> _createSocialProductPost() async {
+    final product = _selectedMarketplaceProduct;
+
+    if (product == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please select a product first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final productId = product['id'];
+
+    if (productId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Selected product has no product ID.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final result =
+          await ApiService.createSocialProductPost(
+        productId: int.parse(
+          productId.toString(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        final post = result['post'];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Social Product Post created successfully. '
+              'Post ID: ${post?['id'] ?? 'unknown'}',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result['error']?.toString() ??
+                  'Unable to create Social Product Post.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Social Publisher error: $e',
+          ),
+        ),
+      );
+    }
+  }*/
+
+  // ============================================================
+  // LOAD AFFILIATE PROGRAMS
+  // ============================================================
+
+  Future<void> _loadAffiliatePrograms({
+    int page = 1,
+  }) async {
+    setState(() {
+      _isLoadingAffiliatePrograms = true;
+    });
+
+    try {
+      final results = await Future.wait([
+        ApiService.getAffiliatePrograms(
+          page: page,
+          limit: _affiliateProgramPageLimit,
+        ),
+        ApiService.getMyAffiliatePrograms(),
+      ]);
+
+      final programsResult = results[0];
+      final membershipsResult = results[1];
+
+      debugPrint(
+        'MY AFFILIATE PROGRAMS RESPONSE: $membershipsResult',
+      );
+
+      final programs =
+          programsResult['programs'] is List
+              ? List<dynamic>.from(
+                  programsResult['programs'],
+                )
+              : <dynamic>[];
+
+      final memberships =
+          membershipsResult['programs'] is List
+              ? List<dynamic>.from(
+                  membershipsResult['programs'],
+                )
+              : <dynamic>[];
+
+      final Map<int, String> statuses = {};
+
+      for (final membership in memberships) {
+        if (membership is! Map) {
+          continue;
+        }
+
+        final programId = membership['program_id'];
+
+        if (programId == null) {
+          continue;
+        }
+
+        final parsedProgramId =
+            int.tryParse(programId.toString());
+
+        if (parsedProgramId == null) {
+          continue;
+        }
+
+        statuses[parsedProgramId] =
+            membership['membership_status']
+                    ?.toString()
+                    .toLowerCase() ??
+                membership['status']
+                    ?.toString()
+                    .toLowerCase() ??
+                'pending';
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _affiliatePrograms = programs;
+
+        _myAffiliatePrograms = memberships;
+
+        _affiliateProgramStatuses = statuses;
+
+        _affiliateProgramPage =
+            (programsResult['page'] as num?)?.toInt() ??
+                page;
+
+        _affiliateProgramTotalPages =
+            (programsResult['total_pages'] as num?)?.toInt() ??
+                1;
+
+        _affiliateProgramTotal =
+            (programsResult['total'] as num?)?.toInt() ??
+                0;
+
+        _isLoadingAffiliatePrograms = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingAffiliatePrograms = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to load Affiliate Programs: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // CHANGE AFFILIATE PROGRAM PAGE
+  // ============================================================
+
+  Future<void> _changeAffiliateProgramPage(
+    int page,
+  ) async {
+    if (_isChangingAffiliateProgramPage) {
+      return;
+    }
+
+    if (page < 1 ||
+        page > _affiliateProgramTotalPages ||
+        page == _affiliateProgramPage) {
+      return;
+    }
+
+    setState(() {
+      _isChangingAffiliateProgramPage = true;
+    });
+
+    try {
+      await _loadAffiliatePrograms(
+        page: page,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isChangingAffiliateProgramPage = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // CREATOR ELIGIBILITY
+  // ============================================================
+
+  bool _isCreatorEligible(dynamic value) {
+    final String v =
+        value?.toString().toLowerCase().trim() ?? '';
+
+    return v == '1' ||
+        v == 'true' ||
+        v == 'yes' ||
+        v == 'eligible';
+  }
+
+// ============================================================
+// JOIN AFFILIATE PROGRAM
+// ============================================================
+
+Future<void> _joinAffiliateProgram({
+  required int programId,
+  required dynamic program,
+}) async {
+  final String brandName =
+      program['brand_name']?.toString() ?? '';
+
+  final String programName =
+      program['program_name']?.toString() ?? '';
+
+  final bool? confirmed =
+      await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text(
+          'Join Affiliate Program',
+        ),
+        content: Text(
+          'Do you want to join the '
+          '$brandName $programName affiliate program?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(
+                context,
+                false,
+              );
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(
+                context,
+                true,
+              );
+            },
+            child: const Text('Join'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (confirmed != true) {
+    return;
+  }
+
+  if (!mounted) return;
+
+  // ============================================================
+  // CHECK EXISTING MEMBERSHIP STATUS
+  // ============================================================
+
+  final existingStatus =
+      _affiliateProgramStatuses[programId]
+          ?.toLowerCase();
+
+  if (existingStatus == 'pending') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Your application for this affiliate program is already pending.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  if (existingStatus == 'active') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'You are already an active member of this affiliate program.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  // ============================================================
+  // JOIN PROGRAM
+  // ============================================================
+
+  try {
+    final result =
+        await ApiService.joinAffiliateProgram(
+      programId: programId,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _affiliateProgramStatuses[programId] =
+          'pending';
+    });
+
+    final returnedStatus =
+        result['membership']?['status']
+            ?.toString();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          returnedStatus != null &&
+                  returnedStatus.isNotEmpty
+              ? 'Affiliate program joined. '
+                'Status: $returnedStatus'
+              : 'Affiliate program joined. '
+                'Status: Pending',
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    // ==========================================================
+    // FRIENDLY DUPLICATE / ERROR MESSAGE
+    // ==========================================================
+
+    final errorText =
+        e.toString().toLowerCase();
+
+    String message =
+        'Unable to join affiliate program.';
+
+    if (errorText.contains('already') ||
+        errorText.contains('duplicate')) {
+      message =
+          'You have already joined this affiliate program.';
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+}
+
+  // ============================================================
+  // AFFILIATE PROGRAM DETAILS
+  // ============================================================
+
+  Future<void> _showAffiliateProgramDetails(
+    Map<String, dynamic> program) async {
+  final String brandName =
+      (program['brand_name'] ?? 'Unknown Brand').toString();
+
+  final String programName =
+      (program['program_name'] ?? 'Affiliate Program').toString();
+
+  final String category =
+      (program['category'] ?? 'Not specified').toString();
+
+  final String country =
+      (program['country_market'] ?? 'Global').toString();
+
+  final String commissionType =
+      (program['commission_type'] ?? '').toString();
+
+  final String commissionRate =
+      (program['commission_rate'] ?? '').toString();
+
+  final String cookieDuration =
+      (program['cookie_duration'] ?? 'Not specified').toString();
+
+  final String affiliateNetwork =
+      (program['affiliate_network'] ?? 'Direct').toString();
+
+  final String verificationNotes =
+      (program['verification_notes'] ?? '').toString();
+
+  final String applicationUrl =
+      (program['application_url'] ?? '').toString();
+
+  final bool creatorEligible =
+      _isCreatorEligible(program['creator_eligible']);
+
+  final int? programId = int.tryParse(program['id'].toString());
+
+  final String? membershipStatus =
+      programId != null ? _affiliateProgramStatuses[programId] : null;
+
+  String statusLabel = '';
+  Color statusColor = Colors.orange;
+
+  if (membershipStatus != null) {
+    switch (membershipStatus.toLowerCase()) {
+      case 'pending':
+        statusLabel = 'Pending';
+        statusColor = Colors.orange;
+        break;
+
+      case 'approved':
+      case 'active':
+        statusLabel = 'Active';
+        statusColor = Colors.green;
+        break;
+
+      case 'rejected':
+        statusLabel = 'Rejected';
+        statusColor = Colors.red;
+        break;
+
+      default:
+        statusLabel = membershipStatus;
+        statusColor = Colors.blue;
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+        ),
+        elevation: 10,
+        child: Container(
+          constraints: const BoxConstraints(
+            maxHeight: 700,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            color: Theme.of(context).cardColor,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ============================================================
+              // HEADER
+              // ============================================================
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(
+                  22,
+                  22,
+                  16,
+                  20,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(22),
+                    topRight: Radius.circular(22),
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.primaryContainer,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.business_center_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+
+                    const SizedBox(width: 14),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            brandName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          Text(
+                            programName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.88),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                      },
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ============================================================
+              // CONTENT
+              // ============================================================
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    20,
+                    20,
+                    20,
+                    10,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ----------------------------------------------------
+                      // COMMISSION + COOKIE
+                      // ----------------------------------------------------
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildAffiliateHighlightCard(
+                              icon: Icons.payments_rounded,
+                              title: 'Commission',
+                              value: commissionRate.isNotEmpty
+                                  ? commissionRate
+                                  : 'Not specified',
+                              subtitle: commissionType.isNotEmpty
+                                  ? commissionType
+                                  : 'Commission',
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child: _buildAffiliateHighlightCard(
+                              icon: Icons.timer_outlined,
+                              title: 'Cookie',
+                              value: cookieDuration,
+                              subtitle: 'Duration',
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // ----------------------------------------------------
+                      // PROGRAM INFORMATION
+                      // ----------------------------------------------------
+                      _buildAffiliateDetailSectionTitle(
+                        'Program Information',
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      _buildAffiliateDetailRow(
+                        icon: Icons.category_outlined,
+                        label: 'Category',
+                        value: category,
+                      ),
+
+                      _buildAffiliateDetailRow(
+                        icon: Icons.public_outlined,
+                        label: 'Market',
+                        value: country,
+                      ),
+
+                      _buildAffiliateDetailRow(
+                        icon: Icons.hub_outlined,
+                        label: 'Affiliate Network',
+                        value: affiliateNetwork,
+                      ),
+
+                      _buildAffiliateDetailRow(
+                        icon: Icons.verified_user_outlined,
+                        label: 'Creator Eligibility',
+                        value: creatorEligible
+                            ? 'Eligible'
+                            : 'Not eligible',
+                        valueColor:
+                            creatorEligible ? Colors.green : Colors.red,
+                        valueBold: true,
+                      ),
+
+                      // ----------------------------------------------------
+                      // MEMBERSHIP STATUS
+                      // ----------------------------------------------------
+                      if (membershipStatus != null) ...[
+                        const SizedBox(height: 18),
+
+                        _buildAffiliateDetailSectionTitle(
+                          'Your Membership',
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 15,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: statusColor.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                color: statusColor,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Membership Status',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // ----------------------------------------------------
+                      // VERIFICATION NOTES
+                      // ----------------------------------------------------
+                      if (verificationNotes.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+
+                        _buildAffiliateDetailSectionTitle(
+                          'Verification Notes',
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.grey.withValues(alpha: 0.15),
+                            ),
+                          ),
+                          child: Text(
+                            verificationNotes,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.5,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      // ----------------------------------------------------
+                      // APPLICATION INFORMATION
+                      // ----------------------------------------------------
+                      if (applicationUrl.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.open_in_new_rounded,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary,
+                                size: 21,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'External Application',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'An external application link is available for this program.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.4,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // ============================================================
+              // BOTTOM ACTIONS
+              // ============================================================
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  20,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.grey.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    Expanded(
+                      flex: 2,
+                      child: membershipStatus != null
+                          ? Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                statusLabel,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            )
+                          : ElevatedButton.icon(
+                              onPressed: creatorEligible && programId != null
+                                ? () {
+                                    Navigator.of(dialogContext).pop();
+
+                                    _joinAffiliateProgram(
+                                      programId: programId,
+                                      program: program,
+                                    );
+                                  }
+                                : null,
+                              icon: const Icon(
+                                Icons.add_circle_outline_rounded,
+                                size: 20,
+                              ),
+                              label: const Text(
+                                'Join Program',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+  // ============================================================
+  // AFFILIATE DETAIL ROW
+  // ============================================================
+
+  Widget _buildAffiliateHighlightCard({
+  required IconData icon,
+  required String title,
+  required String value,
+  required String subtitle,
+}) {
+  final Color primaryColor = Theme.of(context).colorScheme.primary;
+
+  return Container(
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      color: primaryColor.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: primaryColor.withValues(alpha: 0.14),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: primaryColor,
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 18,
+            color: primaryColor,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+
+        const SizedBox(height: 3),
+
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildAffiliateDetailSectionTitle(String title) {
+  return Text(
+    title,
+    style: TextStyle(
+      fontSize: 16,
+      color: Theme.of(context).colorScheme.primary,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.2,
+    ),
+  );
+}
+
+Widget _buildAffiliateDetailRow({
+  required IconData icon,
+  required String label,
+  required String value,
+  Color? valueColor,
+  bool valueBold = false,
+}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 13,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 14,
+                color: valueColor ?? Colors.grey.shade900,
+                fontWeight:
+                    valueBold ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  // ============================================================
+  // AFFILIATE PROGRAM ACTION BUTTON
+  // ============================================================
+
+  Widget _buildAffiliateProgramActionButton({
+    required int programId,
+    required String membershipStatus,
+    required bool creatorEligible,
+    required bool isJoined,
+    required dynamic program,
+  }) {
+    if (!creatorEligible) {
+      return ElevatedButton(
+        onPressed: null,
+        child: const Text(
+          'Not Eligible',
+        ),
+      );
+    }
+
+    final status =
+        membershipStatus.toLowerCase().trim();
+
+    if (status == 'pending') {
+      return ElevatedButton(
+        onPressed: null,
+        child: const Text(
+          'Pending',
+        ),
+      );
+    }
+
+    if (status == 'approved' ||
+        status == 'active') {
+      return ElevatedButton(
+        onPressed: null,
+        child: const Text(
+          'Active',
+        ),
+      );
+    }
+
+    if (status == 'rejected') {
+      return ElevatedButton(
+        onPressed: null,
+        child: const Text(
+          'Rejected',
+        ),
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: () {
+        _joinAffiliateProgram(
+          programId: programId,
+          program: program,
+        );
+      },
+      child: const Text(
+        'Join Program',
+      ),
+    );
+  }
+
+  // ============================================================
+  // LOAD AFFILIATE EARNINGS
+  // ============================================================
+
+  Future<void> _loadAffiliateEarnings() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingAffiliateEarnings = true;
+    });
+
+    try {
+      final result =
+          await ApiService.getAffiliateEarnings();
+
+      final summary =
+          result['summary'] is List
+              ? result['summary'] as List
+              : <dynamic>[];
+
+      if (summary.isNotEmpty &&
+          summary.first is Map) {
+        final firstSummary =
+            Map<String, dynamic>.from(
+          summary.first as Map,
+        );
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _affiliateCurrency =
+              firstSummary['currency']?.toString() ??
+                  'INR';
+
+          _affiliateTotalEarned =
+              double.tryParse(
+                firstSummary['total_earned']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+          _affiliatePending =
+              double.tryParse(
+                firstSummary['pending']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+          _affiliateAvailable =
+              double.tryParse(
+                firstSummary['available']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+          _affiliatePaid =
+              double.tryParse(
+                firstSummary['paid']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+        });
+      } else {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _affiliateCurrency = 'INR';
+          _affiliateTotalEarned = 0;
+          _affiliatePending = 0;
+          _affiliateAvailable = 0;
+          _affiliatePaid = 0;
+        });
+      }
+    } catch (e) {
+      debugPrint(
+        'AFFILIATE EARNINGS LOAD ERROR: $e',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAffiliateEarnings = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // REQUEST AFFILIATE PAYOUT
+  // ============================================================
+
+  Future<void> _requestAffiliatePayout({
+    required double amount,
+    required String paymentMethod,
+    String? notes,
+  }) async {
+    try {
+      final result = await ApiService.requestAffiliatePayout(
+        amount: amount,
+        currency: _affiliateCurrency,
+        paymentMethod: paymentMethod,
+        notes: notes,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final message =
+          result['message']?.toString() ??
+          'Payout request created successfully.';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
+
+      // Refresh earnings so the newly reserved payout
+      // is immediately reflected in Available balance.
+      await _loadAffiliateEarnings();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to request payout: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // SHOW AFFILIATE PAYOUT DIALOG
+  // ============================================================
+
+  Future<void> _showAffiliatePayoutDialog() async {
+    final amountController =
+        TextEditingController();
+
+    final paymentMethodController =
+        TextEditingController();
+
+    final notesController =
+        TextEditingController();
+
+    final formKey =
+        GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        bool isSubmitting = false;
+
+        return StatefulBuilder(
+          builder:
+              (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
+                'Request Payout',
+              ),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize:
+                        MainAxisSize.min,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Available balance: '
+                        '$_affiliateCurrency '
+                        '${_affiliateAvailable.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 16,
+                      ),
+
+                      TextFormField(
+                        controller:
+                            amountController,
+                        keyboardType:
+                            const TextInputType
+                                .numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration:
+                            InputDecoration(
+                          labelText:
+                              'Amount',
+                          prefixText:
+                              '$_affiliateCurrency ',
+                          border:
+                              const OutlineInputBorder(),
+                        ),
+                        validator:
+                            (value) {
+                          final amount =
+                              double.tryParse(
+                            value?.trim() ??
+                                '',
+                          );
+
+                          if (amount == null ||
+                              amount <= 0) {
+                            return 'Enter a valid amount.';
+                          }
+
+                          if (amount >
+                              _affiliateAvailable) {
+                            return 'Amount exceeds available balance.';
+                          }
+
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(
+                        height: 14,
+                      ),
+
+                      TextFormField(
+                        controller:
+                            paymentMethodController,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Payment Method',
+                          hintText:
+                              'e.g. Bank Transfer, UPI',
+                          border:
+                              OutlineInputBorder(),
+                        ),
+                        validator:
+                            (value) {
+                          if (value == null ||
+                              value.trim().isEmpty) {
+                            return 'Enter a payment method.';
+                          }
+
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(
+                        height: 14,
+                      ),
+
+                      TextFormField(
+                        controller:
+                            notesController,
+                        maxLines: 3,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Notes (Optional)',
+                          border:
+                              OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      isSubmitting
+                          ? null
+                          : () {
+                              Navigator.of(
+                                dialogContext,
+                              ).pop();
+                            },
+                  child: const Text(
+                    'Cancel',
+                  ),
+                ),
+
+                ElevatedButton(
+                  onPressed:
+                      isSubmitting
+                          ? null
+                          : () async {
+                              if (!formKey
+                                  .currentState!
+                                  .validate()) {
+                                return;
+                              }
+
+                              final amount =
+                                  double.parse(
+                                amountController
+                                    .text
+                                    .trim(),
+                              );
+
+                              setDialogState(() {
+                                isSubmitting =
+                                    true;
+                              });
+
+                              await _requestAffiliatePayout(
+                                amount: amount,
+                                paymentMethod:
+                                    paymentMethodController
+                                        .text
+                                        .trim(),
+                                notes:
+                                    notesController
+                                            .text
+                                            .trim()
+                                            .isEmpty
+                                        ? null
+                                        : notesController
+                                            .text
+                                            .trim(),
+                              );
+
+                              if (dialogContext.mounted) {
+                                Navigator.of(
+                                  dialogContext,
+                                ).pop();
+                              }
+                            },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child:
+                              CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Request Payout',
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    amountController.dispose();
+    paymentMethodController.dispose();
+    notesController.dispose();
+  }
+
+  // ============================================================
+  // LOAD DASHBOARD
+  // ============================================================
+
+  Future<void> _loadDashboard() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+
+      // Reset pagination
+      _campaignPage = 1;
+      _submissionPage = 1;
+
+      _campaignTotalPages = 1;
+      _submissionTotalPages = 1;
+
+      // Reset displayed records
+      _campaigns = [];
+      _submissions = [];
+
+      // Reset complete statistics
+      _totalCampaigns = 0;
+      _totalSubmissions = 0;
+      _totalEarnings = 0;
+    });
+
+    try {
+      final results = await Future.wait([
+        ApiService.getCampaigns(
+          page: 1,
+          limit: _pageLimit,
+        ),
+        ApiService.getMySubmissionLogs(
+          page: 1,
+          limit: _pageLimit,
+        ),
+      ]);
+
+      final campaignsResult =
+          results[0];
+
+      final submissionsResult =
+          results[1];
+
+      if (!mounted) return;
+
+      // ========================================================
+      // CAMPAIGN PAGE ITEMS
+      // ========================================================
+
+      final campaignItems =
+          campaignsResult['items'] is List
+              ? List<dynamic>.from(
+                  campaignsResult['items'],
+                )
+              : <dynamic>[];
+
+      // ========================================================
+      // SUBMISSION PAGE ITEMS
+      // ========================================================
+
+      final submissionItems =
+          submissionsResult['items'] is List
+              ? List<dynamic>.from(
+                  submissionsResult['items'],
+                )
+              : <dynamic>[];
+
+      // ========================================================
+      // COMPLETE CAMPAIGN TOTAL
+      // ========================================================
+
+      final campaignTotal =
+          int.tryParse(
+                campaignsResult['total']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+      // ========================================================
+      // COMPLETE SUBMISSION TOTAL
+      // ========================================================
+
+      final submissionTotal =
+          int.tryParse(
+                submissionsResult['total']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+      // ========================================================
+      // COMPLETE APPROVED EARNINGS
+      // Returned by backend independently of pagination.
+      // ========================================================
+
+      final approvedEarnings =
+          double.tryParse(
+                submissionsResult[
+                            'approved_earnings']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+      // ========================================================
+      // STORED USER
+      // ========================================================
+
+      final tokenUser =
+          await _getStoredUser();
+
+      // ========================================================
+      // UPDATE STATE
+      // ========================================================
+
+      setState(() {
+        // Current page records
+        _campaigns = campaignItems;
+        _submissions = submissionItems;
+
+        // Complete statistics
+        _totalCampaigns =
+            campaignTotal;
+
+        _totalSubmissions =
+            submissionTotal;
+
+        _totalEarnings =
+            approvedEarnings;
+
+        // Pagination
+        _campaignTotalPages =
+            _calculateTotalPages(
+          campaignTotal,
+        );
+
+        _submissionTotalPages =
+            _calculateTotalPages(
+          submissionTotal,
+        );
+
+        if (tokenUser != null &&
+            tokenUser['name'] != null) {
+          _creatorName =
+              tokenUser['name'].toString();
+        }
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage =
+            'Failed to load dashboard: $e';
+
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ============================================================
+  // CALCULATE TOTAL PAGES
+  // ============================================================
+
+  int _calculateTotalPages(
+    int total,
+  ) {
+    if (total <= 0) {
+      return 1;
+    }
+
+    return (total + _pageLimit - 1) ~/
+        _pageLimit;
+  }
+
+  // ============================================================
+  // CHANGE CAMPAIGN PAGE
+  // ============================================================
+
+  Future<void> _changeCampaignPage(
+    int page,
+  ) async {
+    if (_isChangingCampaignPage) {
+      return;
+    }
+
+    if (page < 1 ||
+        page > _campaignTotalPages ||
+        page == _campaignPage) {
+      return;
+    }
+
+    setState(() {
+      _isChangingCampaignPage = true;
+    });
+
+    try {
+      final result =
+          await ApiService.getCampaigns(
+        page: page,
+        limit: _pageLimit,
+      );
+
+      if (!mounted) return;
+
+      final items =
+          result['items'] is List
+              ? List<dynamic>.from(
+                  result['items'],
+                )
+              : <dynamic>[];
+
+      final total =
+          int.tryParse(
+                result['total']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+      setState(() {
+        _campaigns = items;
+
+        _campaignPage = page;
+
+        _campaignTotalPages =
+            _calculateTotalPages(
+          total,
+        );
+
+        // IMPORTANT:
+        // Do NOT change _totalCampaigns here.
+        // Statistics remain complete totals.
+
+        _isChangingCampaignPage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isChangingCampaignPage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load campaigns: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // CHANGE SUBMISSION PAGE
+  // ============================================================
+
+  Future<void> _changeSubmissionPage(
+    int page,
+  ) async {
+    if (_isChangingSubmissionPage) {
+      return;
+    }
+
+    if (page < 1 ||
+        page > _submissionTotalPages ||
+        page == _submissionPage) {
+      return;
+    }
+
+    setState(() {
+      _isChangingSubmissionPage = true;
+    });
+
+    try {
+      final result =
+          await ApiService.getMySubmissionLogs(
+        page: page,
+        limit: _pageLimit,
+      );
+
+      if (!mounted) return;
+
+      final items =
+          result['items'] is List
+              ? List<dynamic>.from(
+                  result['items'],
+                )
+              : <dynamic>[];
+
+      final total =
+          int.tryParse(
+                result['total']
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
+
+      setState(() {
+        _submissions = items;
+
+        _submissionPage = page;
+
+        _submissionTotalPages =
+            _calculateTotalPages(
+          total,
+        );
+
+        // IMPORTANT:
+        // Do NOT change _totalSubmissions or
+        // _totalEarnings here.
+        // Statistics remain complete totals.
+
+        _isChangingSubmissionPage =
+            false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isChangingSubmissionPage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load submissions: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // GET STORED USER
+  // ============================================================
+
+  Future<Map<String, dynamic>?>
+      _getStoredUser() async {
+    final prefs =
+        await SharedPreferences
+            .getInstance();
+
+    final userJson =
+        prefs.getString('user');
+
+    if (userJson == null) {
+      return null;
+    }
+
+    try {
+      return Map<String, dynamic>.from(
+        jsonDecode(userJson) as Map,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+
+  Future<void> _logout() async {
+    await ApiService.logout();
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            const AuthScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
+  // ============================================================
+  // FORMAT CURRENCY
+  // ============================================================
+
+  String _formatCurrency(
+    double value,
+  ) {
+    return '₹${value.toStringAsFixed(2)}';
+  }
+
+  // ============================================================
+  // MAIN BUILD
+  // ============================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Rmworkz Influencer',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed:
+                _isLoading
+                    ? null
+                    : _refreshAll,
+            icon: const Icon(
+              Icons.refresh,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Logout',
+            onPressed: _logout,
+            icon: const Icon(
+              Icons.logout,
+            ),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshAll,
+        child: _buildBody(),
+      ),
+    );
+  }
+
+  // ============================================================
+  // BODY
+  // ============================================================
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child:
+            CircularProgressIndicator(),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return ListView(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding:
+            const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 100),
+
+          const Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.redAccent,
+          ),
+
+          const SizedBox(height: 16),
+
+          Center(
+            child: Text(
+              _errorMessage!,
+              textAlign:
+                  TextAlign.center,
+              style:
+                  const TextStyle(
+                color:
+                    Colors.redAccent,
+                fontSize: 16,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Center(
+            child:
+                ElevatedButton.icon(
+              onPressed:
+                  _refreshAll,
+              icon: const Icon(
+                Icons.refresh,
+              ),
+              label: const Text(
+                'Try Again',
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView(
+      physics:
+          const AlwaysScrollableScrollPhysics(),
+      padding:
+          const EdgeInsets.all(16),
+      children: [
+        _buildWelcomeCard(),
+
+        const SizedBox(height: 16),
+
+        _buildStatistics(),
+
+        const SizedBox(height: 24),
+
+        // ============================================================
+        // AFFILIATE PROGRAMS
+        // ============================================================
+
+        _buildAffiliateProgramsSection(),
+
+        const SizedBox(height: 24),
+
+        // ============================================================
+        // MY AFFILIATE PROGRAMS
+        // ============================================================
+
+        _buildMyAffiliateProgramsSection(),
+
+        const SizedBox(height: 24),
+
+        // ============================================================
+        // AFFILIATE OFFERS
+        // ============================================================
+
+        _buildAffiliateOffersSection(),
+
+        const SizedBox(height: 24),
+
+        // ============================================================
+        // AVAILABLE MARKETPLACE PRODUCTS
+        // ============================================================
+
+        _buildSectionTitle(
+          'Available Products',
+          '$_marketplaceTotalProducts',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_isLoadingMarketplaceProducts)
+          const Padding(
+            padding:
+                EdgeInsets.symmetric(
+              vertical: 30,
+            ),
+            child: Center(
+              child:
+                  CircularProgressIndicator(),
+            ),
+          )
+        else if (_marketplaceProducts.isEmpty)
+          _buildEmptyCard(
+            icon: Icons
+                .shopping_bag_outlined,
+            message:
+                'No marketplace products available.',
+          )
+        else
+          ..._marketplaceProducts.map(
+            (product) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildMarketplaceProductCard(
+                product,
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 24),
+
+        // ============================================================
+        // MARKETPLACE PAGINATION
+        // ============================================================
+
+        if (!_isLoadingMarketplaceProducts &&
+            _marketplaceTotalPages > 1) ...[
+          const SizedBox(height: 4),
+
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    (_marketplacePage > 1 &&
+                            !_isChangingMarketplacePage)
+                        ? () {
+                            _loadMarketplaceProducts(
+                              page:
+                                  _marketplacePage -
+                                      1,
+                            );
+                          }
+                        : null,
+                icon: const Icon(
+                  Icons.chevron_left,
+                  size: 20,
+                ),
+                label:
+                    const Text('Previous'),
+              ),
+
+              const SizedBox(width: 16),
+
+              Text(
+                '$_marketplacePage / '
+                '$_marketplaceTotalPages',
+                style:
+                    const TextStyle(
+                  fontWeight:
+                      FontWeight.bold,
+                  color:
+                      Colors.white70,
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              OutlinedButton.icon(
+                onPressed:
+                    (_marketplacePage <
+                                _marketplaceTotalPages &&
+                            !_isChangingMarketplacePage)
+                        ? () {
+                            _loadMarketplaceProducts(
+                              page:
+                                  _marketplacePage +
+                                      1,
+                            );
+                          }
+                        : null,
+                icon: const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                ),
+                label:
+                    const Text('Next'),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          if (_isChangingMarketplacePage)
+            const Center(
+              child: Padding(
+                padding:
+                    EdgeInsets.only(top: 4),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child:
+                      CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            ),
+        ],
+
+        const SizedBox(height: 24),
+
+        // ======================================================
+        // AVAILABLE CAMPAIGNS
+        // ======================================================
+
+        _buildSectionTitle(
+          'Available Campaigns',
+          '$_totalCampaigns',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_campaigns.isEmpty)
+          _buildEmptyCard(
+            icon:
+                Icons.campaign_outlined,
+            message:
+                'No active campaigns available.',
+          )
+        else ...[
+          ..._campaigns.map(
+            (campaign) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildCampaignCard(
+                campaign,
+              ),
+            ),
+          ),
+
+          _buildPaginationControls(
+            currentPage:
+                _campaignPage,
+            totalPages:
+                _campaignTotalPages,
+            isLoading:
+                _isChangingCampaignPage,
+            onPrevious: () {
+              _changeCampaignPage(
+                _campaignPage - 1,
+              );
+            },
+            onNext: () {
+              _changeCampaignPage(
+                _campaignPage + 1,
+              );
+            },
+          ),
+        ],
+
+        const SizedBox(height: 20),
+
+        // ======================================================
+        // MY SUBMISSIONS
+        // ======================================================
+
+        _buildSectionTitle(
+          'My Submissions',
+          '$_totalSubmissions',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_submissions.isEmpty)
+          _buildEmptyCard(
+            icon: Icons.history,
+            message:
+                'You have no submissions yet.',
+          )
+        else ...[
+          ..._submissions.map(
+            (submission) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildSubmissionCard(
+                submission,
+              ),
+            ),
+          ),
+
+          _buildPaginationControls(
+            currentPage:
+                _submissionPage,
+            totalPages:
+                _submissionTotalPages,
+            isLoading:
+                _isChangingSubmissionPage,
+            onPrevious: () {
+              _changeSubmissionPage(
+                _submissionPage - 1,
+              );
+            },
+            onNext: () {
+              _changeSubmissionPage(
+                _submissionPage + 1,
+              );
+            },
+          ),
+        ],
+
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+
+  // ============================================================
+  // AFFILIATE PROGRAMS SECTION
+  // ============================================================
+
+  Widget _buildAffiliateProgramsSection() {
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(
+          'Affiliate Programs',
+          '$_affiliateProgramTotal',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_isLoadingAffiliatePrograms)
+          const Padding(
+            padding:
+                EdgeInsets.symmetric(
+              vertical: 30,
+            ),
+            child: Center(
+              child:
+                  CircularProgressIndicator(),
+            ),
+          )
+        else if (_affiliatePrograms.isEmpty)
+          _buildEmptyCard(
+            icon:
+                Icons.link_outlined,
+            message:
+                'No Affiliate Programs available.',
+          )
+        else
+          ..._affiliatePrograms.map(
+            (program) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildAffiliateProgramCard(
+                program,
+              ),
+            ),
+          ),
+
+        if (_affiliateProgramTotalPages > 1)
+          _buildPaginationControls(
+            currentPage:
+                _affiliateProgramPage,
+            totalPages:
+                _affiliateProgramTotalPages,
+            isLoading:
+                _isChangingAffiliateProgramPage,
+            onPrevious: () {
+              _changeAffiliateProgramPage(
+                _affiliateProgramPage - 1,
+              );
+            },
+            onNext: () {
+              _changeAffiliateProgramPage(
+                _affiliateProgramPage + 1,
+              );
+            },
+          ),
+
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildMyAffiliateProgramsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(
+          'My Affiliate Programs',
+          _myAffiliatePrograms.length.toString(),
+        ),
+        const SizedBox(height: 12),
+
+        if (_myAffiliatePrograms.isEmpty)
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    size: 42,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'You have not joined any affiliate programs yet.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Join an affiliate program above to see it here.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ..._myAffiliatePrograms.map(
+            (membership) {
+              if (membership is! Map) {
+                return const SizedBox.shrink();
+              }
+
+              return _buildMyAffiliateProgramCard(
+                Map<String, dynamic>.from(membership),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // AFFILIATE OFFERS SECTION
+  // ============================================================
+
+  Widget _buildAffiliateOffersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(
+          'Affiliate Offers',
+          _affiliateOfferTotal.toString(),
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_isLoadingAffiliateOffers)
+          const Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 30,
+            ),
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_affiliateOffers.isEmpty)
+          _buildEmptyCard(
+            icon: Icons.local_offer_outlined,
+            message: 'No Affiliate Offers available.',
+          )
+        else
+          ..._affiliateOffers.map(
+            (offer) {
+              if (offer is! Map) {
+                return const SizedBox.shrink();
+              }
+
+              return Padding(
+                padding: const EdgeInsets.only(
+                  bottom: 12,
+                ),
+                child: _buildAffiliateOfferCard(
+                  Map<String, dynamic>.from(offer),
+                ),
+              );
+            },
+          ),
+
+        if (_affiliateOfferTotalPages > 1)
+          _buildPaginationControls(
+            currentPage: _affiliateOfferPage,
+            totalPages: _affiliateOfferTotalPages,
+            isLoading: _isChangingAffiliateOfferPage,
+            onPrevious: () {
+              _loadAffiliateOffers(
+                page: _affiliateOfferPage - 1,
+              );
+            },
+            onNext: () {
+              _loadAffiliateOffers(
+                page: _affiliateOfferPage + 1,
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // AFFILIATE OFFER CARD
+  // ============================================================
+
+  Widget _buildAffiliateOfferCard(
+    Map<String, dynamic> offer,
+  ) {
+    final String brandName =
+        offer['brand_name']?.toString() ?? 'Unknown Brand';
+
+    final String title =
+        offer['title']?.toString() ?? 'Affiliate Offer';
+
+    final String description =
+        offer['description']?.toString() ?? '';
+
+    final String commissionType =
+        offer['commission_type']?.toString() ?? '';
+
+    final String commissionRate =
+        offer['commission_rate']?.toString() ?? '';
+
+    final String networkName =
+        offer['affiliate_network']?.toString() ?? '';
+
+    final String membershipStatus =
+        offer['creator_membership_status']
+                ?.toString()
+                .toLowerCase() ??
+            '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        brandName,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Icon(
+                  Icons.local_offer_outlined,
+                  size: 24,
+                ),
+              ],
+            ),
+
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 12),
+
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+
+            if (commissionRate.isNotEmpty)
+              _buildMyAffiliateProgramInfoRow(
+                Icons.payments_outlined,
+                commissionType.isNotEmpty
+                    ? commissionType
+                    : 'Commission',
+                commissionRate,
+              ),
+
+            if (networkName.isNotEmpty)
+              _buildMyAffiliateProgramInfoRow(
+                Icons.hub_outlined,
+                'Network',
+                networkName,
+              ),
+
+            if (membershipStatus.isNotEmpty)
+              _buildMyAffiliateProgramInfoRow(
+                Icons.verified_outlined,
+                'Membership',
+                membershipStatus,
+              ),
+
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  _showAffiliateOfferDetails(
+                    offer,
+                  );
+                },
+                child: const Text(
+                  'View Offer',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyAffiliateProgramCard(
+    Map<String, dynamic> membership,
+  ) {
+    //final int? programId =
+    //    int.tryParse(membership['program_id']?.toString() ?? '');
+
+    final String brandName =
+        membership['brand_name']?.toString() ?? 'Unknown Brand';
+
+    final String programName =
+        membership['program_name']?.toString() ?? 'Affiliate Program';
+
+    final String category =
+        membership['category']?.toString() ?? '';
+
+    final String commissionType =
+        membership['commission_type']?.toString() ?? '';
+
+    final String commissionRate =
+        membership['commission_rate']?.toString() ?? '';
+
+    final String affiliateNetwork =
+        membership['affiliate_network']?.toString() ?? '';
+
+    final String membershipStatus =
+        membership['membership_status']?.toString().toLowerCase() ??
+            'pending';
+
+    Color statusColor;
+    Color statusBackground;
+
+    switch (membershipStatus) {
+      case 'active':
+      case 'approved':
+        statusColor = Colors.green.shade700;
+        statusBackground = Colors.green.shade50;
+        break;
+
+      case 'rejected':
+        statusColor = Colors.red.shade700;
+        statusBackground = Colors.red.shade50;
+        break;
+
+      case 'pending':
+      default:
+        statusColor = Colors.orange.shade800;
+        statusBackground = Colors.orange.shade50;
+        break;
+    }
+
+    String statusLabel;
+
+    switch (membershipStatus) {
+      case 'active':
+      case 'approved':
+        statusLabel = 'Active';
+        break;
+
+      case 'rejected':
+        statusLabel = 'Rejected';
+        break;
+
+      default:
+        statusLabel = 'Pending';
+        break;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        brandName,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        programName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBackground,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            if (category.isNotEmpty)
+              _buildMyAffiliateProgramInfoRow(
+                Icons.category_outlined,
+                'Category',
+                category,
+              ),
+
+            if (commissionRate.isNotEmpty)
+              _buildMyAffiliateProgramInfoRow(
+                Icons.payments_outlined,
+                commissionType.isNotEmpty
+                    ? commissionType
+                    : 'Commission',
+                commissionRate,
+              ),
+
+            if (affiliateNetwork.isNotEmpty)
+              _buildMyAffiliateProgramInfoRow(
+                Icons.hub_outlined,
+                'Network',
+                affiliateNetwork,
+              ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      _showAffiliateProgramDetails(
+                        Map<String, dynamic>.from(membership),
+                      );
+                    },
+                    child: const Text('View Details'),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: null,
+                    child: Text(statusLabel),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyAffiliateProgramInfoRow(
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: Colors.grey.shade600,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+                children: [
+                  TextSpan(
+                    text: '$label: ',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  TextSpan(
+                    text: value,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // AFFILIATE OFFER DETAILS
+  // ============================================================
+
+  // ============================================================
+  // AFFILIATE OFFER DETAILS
+  // ============================================================
+
+  Future<void> _showAffiliateOfferDetails(
+    Map<String, dynamic> offer,
+  ) async {
+      final int? offerId =
+        int.tryParse(
+      offer['offer_id']?.toString() ?? '',
+    );
+
+    final String brandName =
+        offer['brand_name']?.toString() ?? 'Unknown Brand';
+
+    final String title =
+        offer['title']?.toString() ?? 'Affiliate Offer';
+
+    final String description =
+        offer['description']?.toString() ?? '';
+
+    final String commissionType =
+        offer['commission_type']?.toString() ?? '';
+
+    final String commissionRate =
+        offer['commission_rate']?.toString() ?? '';
+
+    final String networkName =
+        offer['affiliate_network']?.toString() ?? '';
+
+    final String destinationUrl =
+        offer['destination_url']?.toString() ?? '';
+
+    final bool canGenerateLink =
+        offer['can_generate_link'] == true;
+
+    bool isGeneratingLink = false;
+    String? generatedAffiliateUrl;
+    String? linkError;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (
+            context,
+            setDialogState,
+          ) {
+            return AlertDialog(
+              title: Text(
+                '$brandName - Offer',
+              ),
+
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(description),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    if (commissionRate.isNotEmpty)
+                      _buildMyAffiliateProgramInfoRow(
+                        Icons.payments_outlined,
+                        commissionType.isNotEmpty
+                            ? commissionType
+                            : 'Commission',
+                        commissionRate,
+                      ),
+
+                    if (networkName.isNotEmpty)
+                      _buildMyAffiliateProgramInfoRow(
+                        Icons.hub_outlined,
+                        'Network',
+                        networkName,
+                      ),
+
+                    if (generatedAffiliateUrl != null) ...[
+                      const SizedBox(height: 18),
+
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.green
+                              .withValues(alpha: 0.08),
+                          borderRadius:
+                              BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.green
+                                .withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_outline,
+                                  color: Colors.green,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'Affiliate Link Generated',
+                                    style: TextStyle(
+                                      fontWeight:
+                                          FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            SelectableText(
+                              generatedAffiliateUrl!,
+                              style: const TextStyle(
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    if (linkError != null) ...[
+                      const SizedBox(height: 12),
+
+                      Text(
+                        linkError!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+
+                    if (destinationUrl.isNotEmpty) ...[
+                      const SizedBox(height: 18),
+
+                      _buildMyAffiliateProgramInfoRow(
+                        Icons.open_in_new_outlined,
+                        'Destination',
+                        destinationUrl,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              actions: [
+                TextButton(
+                  onPressed: isGeneratingLink
+                      ? null
+                      : () {
+                          Navigator.of(
+                            dialogContext,
+                          ).pop();
+                        },
+                  child: const Text('Close'),
+                ),
+
+                if (generatedAffiliateUrl == null)
+                  ElevatedButton.icon(
+                    onPressed:
+                        (!canGenerateLink ||
+                                offerId == null ||
+                                isGeneratingLink)
+                            ? null
+                            : () async {
+                                setDialogState(() {
+                                  isGeneratingLink = true;
+                                  linkError = null;
+                                });
+
+                                try {
+                                  final result =
+                                      await ApiService
+                                          .createAffiliateLink(
+                                    offerId: offerId,
+                                  );
+
+                                  final link =
+                                      result['link'];
+
+                                  final String?
+                                      affiliateUrl =
+                                      link is Map
+                                          ? link[
+                                                  'affiliate_url']
+                                              ?.toString()
+                                          : null;
+
+                                  if (affiliateUrl ==
+                                          null ||
+                                      affiliateUrl
+                                          .isEmpty) {
+                                    throw Exception(
+                                      'Affiliate URL was not returned.',
+                                    );
+                                  }
+
+                                  setDialogState(() {
+                                    generatedAffiliateUrl =
+                                        affiliateUrl;
+                                    isGeneratingLink =
+                                        false;
+                                  });
+                                } catch (e) {
+                                  setDialogState(() {
+                                    linkError =
+                                        e.toString();
+                                    isGeneratingLink =
+                                        false;
+                                  });
+                                }
+                              },
+                    icon: isGeneratingLink
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.link_rounded,
+                            size: 20,
+                          ),
+                    label: Text(
+                      isGeneratingLink
+                          ? 'Generating...'
+                          : 'Generate Affiliate Link',
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+
+  // ============================================================
+  // AFFILIATE PROGRAM CARD
+  // ============================================================
+
+  Widget _buildAffiliateProgramCard(
+    dynamic program,
+  ) {
+    if (program is! Map) {
+      return const SizedBox.shrink();
+    }
+
+    final int? programId =
+        int.tryParse(
+      program['id']?.toString() ?? '',
+    );
+
+    if (programId == null) {
+      return const SizedBox.shrink();
+    }
+
+    final String brandName =
+        program['brand_name']
+                ?.toString() ??
+            '';
+
+    final String programName =
+        program['program_name']
+                ?.toString() ??
+            '';
+
+    final String category =
+        program['category']
+                ?.toString() ??
+            '';
+
+    final String commissionType =
+        program['commission_type']
+                ?.toString() ??
+            '';
+
+    final String commissionRate =
+        program['commission_rate']
+                ?.toString() ??
+            '';
+
+    final String cookieDuration =
+        program['cookie_duration']
+                ?.toString() ??
+            '';
+
+    final String network =
+        program['affiliate_network']
+                ?.toString() ??
+            '';
+
+    final bool creatorEligible =
+        _isCreatorEligible(
+      program['creator_eligible'],
+    );
+
+    final String membershipStatus =
+        _affiliateProgramStatuses[
+                programId] ??
+            '';
+
+    final bool isJoined =
+        membershipStatus.isNotEmpty;
+
+    return Card(
+      margin:
+          const EdgeInsets.only(
+        bottom: 0,
+      ),
+      child: Padding(
+        padding:
+            const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            // --------------------------------------------------
+            // BRAND
+            // --------------------------------------------------
+
+            Text(
+              brandName.isNotEmpty
+                  ? brandName
+                  : 'Affiliate Program',
+              style:
+                  const TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+
+            // --------------------------------------------------
+            // PROGRAM NAME
+            // --------------------------------------------------
+
+            if (programName.isNotEmpty) ...[
+              const SizedBox(height: 4),
+
+              Text(
+                programName,
+                style:
+                    TextStyle(
+                  fontSize: 15,
+                  color:
+                      Colors.grey.shade400,
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 12),
+
+            // --------------------------------------------------
+            // PROGRAM INFORMATION
+            // --------------------------------------------------
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (category.isNotEmpty)
+                  Chip(
+                    label:
+                        Text(category),
+                  ),
+
+                if (commissionRate
+                    .isNotEmpty)
+                  Chip(
+                    label: Text(
+                      'Commission: '
+                      '$commissionRate'
+                      '${commissionType.isNotEmpty ? ' $commissionType' : ''}',
+                    ),
+                  ),
+
+                if (cookieDuration
+                    .isNotEmpty)
+                  Chip(
+                    label: Text(
+                      'Cookie: '
+                      '$cookieDuration',
+                    ),
+                  ),
+              ],
+            ),
+
+            // --------------------------------------------------
+            // NETWORK
+            // --------------------------------------------------
+
+            if (network.isNotEmpty) ...[
+              const SizedBox(height: 8),
+
+              Text(
+                'Network: $network',
+                style:
+                    const TextStyle(
+                  fontSize: 13,
+                  color:
+                      Colors.white60,
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 12),
+
+            // --------------------------------------------------
+            // ACTIONS
+            // --------------------------------------------------
+
+            Row(
+              children: [
+                Expanded(
+                  child:
+                      OutlinedButton(
+                    onPressed: () {
+                      _showAffiliateProgramDetails(
+                        Map<String, dynamic>.from(program),
+                      );
+                    },
+                    child:
+                        const Text(
+                      'View Details',
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child:
+                      _buildAffiliateProgramActionButton(
+                    programId:
+                        programId,
+                    membershipStatus:
+                        membershipStatus,
+                    creatorEligible:
+                        creatorEligible,
+                    isJoined:
+                        isJoined,
+                    program:
+                        program,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // PAGINATION CONTROLS
+  // ============================================================
+
+  Widget _buildPaginationControls({
+    required int currentPage,
+    required int totalPages,
+    required bool isLoading,
+    required VoidCallback onPrevious,
+    required VoidCallback onNext,
+  }) {
+    final isFirstPage =
+        currentPage <= 1;
+
+    final isLastPage =
+        currentPage >= totalPages;
+
+    return Padding(
+      padding:
+          const EdgeInsets.only(
+        top: 4,
+        bottom: 8,
+      ),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.center,
+        children: [
+          // ----------------------------------------------------
+          // PREVIOUS
+          // ----------------------------------------------------
+
+          OutlinedButton.icon(
+            onPressed:
+                isLoading ||
+                        isFirstPage
+                    ? null
+                    : onPrevious,
+            icon: const Icon(
+              Icons.chevron_left,
+            ),
+            label:
+                const Text('Previous'),
+          ),
+
+          const SizedBox(width: 16),
+
+          // ----------------------------------------------------
+          // PAGE NUMBER
+          // ----------------------------------------------------
+
+          if (isLoading)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child:
+                  CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            )
+          else
+            Text(
+              'Page $currentPage '
+              'of $totalPages',
+              style:
+                  const TextStyle(
+                fontWeight:
+                    FontWeight.bold,
+                color:
+                    Colors.white70,
+              ),
+            ),
+
+          const SizedBox(width: 16),
+
+          // ----------------------------------------------------
+          // NEXT
+          // ----------------------------------------------------
+
+          OutlinedButton.icon(
+            onPressed:
+                isLoading ||
+                        isLastPage
+                    ? null
+                    : onNext,
+            icon: const Icon(
+              Icons.chevron_right,
+            ),
+            label:
+                const Text('Next'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // WELCOME CARD
+  // ============================================================
+
+  Widget _buildWelcomeCard() {
+    return Container(
+      padding:
+          const EdgeInsets.all(20),
+      decoration:
+          BoxDecoration(
+        gradient:
+            const LinearGradient(
+          colors: [
+            Color(0xFF0EA5E9),
+            Color(0xFF4F46E5),
+          ],
+        ),
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 30,
+            backgroundColor:
+                Colors.white.withValues(
+              alpha: 0.2,
+            ),
+            child:
+                const Icon(
+              Icons.person,
+              size: 34,
+              color: Colors.white,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Welcome back,',
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  _creatorName,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 22,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                const Text(
+                  'Creator',
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // STATISTICS
+  // ============================================================
+
+  Widget _buildStatistics() {
+    return LayoutBuilder(
+      builder:
+          (context, constraints) {
+        final width =
+            constraints.maxWidth;
+
+        final cardWidth =
+            (width - 32) / 3;
+
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            // --------------------------------------------------
+            // TOTAL CAMPAIGNS
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .campaign_outlined,
+                title: 'Campaigns',
+                value:
+                    '$_totalCampaigns',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // TOTAL SUBMISSIONS
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .assignment_outlined,
+                title:
+                    'Submissions',
+                value:
+                    '$_totalSubmissions',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // TOTAL APPROVED EARNINGS
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .account_balance_wallet_outlined,
+                title:
+                    'Approved Earnings',
+                value:
+                    _formatCurrency(
+                  _totalEarnings,
+                ),
+              ),
+            ),
+            // --------------------------------------------------
+            // AFFILIATE TOTAL EARNED
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .payments_outlined,
+                title:
+                    'Affiliate Total Earned',
+                value:
+                    _isLoadingAffiliateEarnings
+                    ? 'Loading...'
+                    : '$_affiliateCurrency '
+                      '${_affiliateTotalEarned.toStringAsFixed(2)}',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // AFFILIATE PENDING
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .hourglass_empty_outlined,
+                title:
+                    'Affiliate Pending',
+                value:
+                    '$_affiliateCurrency '
+                    '${_affiliatePending.toStringAsFixed(2)}',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // AFFILIATE AVAILABLE
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .account_balance_wallet_outlined,
+                title:
+                    'Affiliate Available',
+                value:
+                    '$_affiliateCurrency '
+                    '${_affiliateAvailable.toStringAsFixed(2)}',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // AFFILIATE PAID
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                   .check_circle_outline,
+                title:
+                    'Affiliate Paid',
+                value:
+                    '$_affiliateCurrency '
+                    '${_affiliatePaid.toStringAsFixed(2)}',
+              ),
+            ),
+                        // --------------------------------------------------
+            // REQUEST AFFILIATE PAYOUT
+            // --------------------------------------------------
+
+            SizedBox(
+              width: width,
+              child: Card(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.account_balance_outlined,
+                        size: 30,
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      const Text(
+                        'Request Payout',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      Expanded(
+                        child: Text(
+                          'Available: '
+                          '$_affiliateCurrency '
+                          '${_affiliateAvailable.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      ElevatedButton(
+                        onPressed:
+                            _affiliateAvailable > 0
+                                ? _showAffiliatePayoutDialog
+                                : null,
+                        child: const Text(
+                          'Request',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // STAT CARD
+  // ============================================================
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      padding:
+          const EdgeInsets.all(18),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF0F172A),
+        borderRadius:
+            BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white10,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            color:
+                Colors.lightBlue,
+            size: 28,
+          ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            title,
+            maxLines: 1,
+            overflow:
+                TextOverflow.ellipsis,
+            style:
+                const TextStyle(
+              color: Colors.white60,
+              fontSize: 13,
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          Text(
+            value,
+            maxLines: 1,
+            overflow:
+                TextOverflow.ellipsis,
+            style:
+                const TextStyle(
+              fontSize: 20,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // SECTION TITLE
+  // ============================================================
+
+  Widget _buildSectionTitle(
+    String title,
+    String count,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style:
+                const TextStyle(
+              fontSize: 20,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ),
+
+        Container(
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 5,
+          ),
+          decoration:
+              BoxDecoration(
+            color:
+                Colors.lightBlue
+                    .withValues(
+              alpha: 0.15,
+            ),
+            borderRadius:
+                BorderRadius.circular(
+              20,
+            ),
+          ),
+          child: Text(
+            count,
+            style:
+                const TextStyle(
+              color:
+                  Colors.lightBlue,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // MARKETPLACE PRODUCT CARD
+  // ============================================================
+
+  Widget _buildMarketplaceProductCard(
+    dynamic product,
+  ) {
+    if (product is! Map) {
+      return const SizedBox.shrink();
+    }
+
+    final title =
+        product['title']?.toString() ??
+            'Untitled Product';
+
+    final description =
+        product['description']
+                ?.toString() ??
+            '';
+
+    final imageUrl =
+        product['image_url']
+                ?.toString() ??
+            '';
+
+    final price =
+        double.tryParse(
+              product['price']
+                      ?.toString() ??
+                  '0',
+            ) ??
+            0;
+
+    final commission =
+        double.tryParse(
+              product[
+                        'commission_percentage']
+                    ?.toString() ??
+                  '0',
+            ) ??
+            0;
+
+        final affiliateProgramName =
+        product['affiliate_program_name']
+                ?.toString() ??
+            '';
+
+    //final affiliateProgramBrandName =
+    //    product['affiliate_program_brand_name']
+    //            ?.toString() ??
+    //        '';
+
+    final creatorMembershipStatus =
+        product['creator_membership_status']
+                ?.toString() ??
+            '';
+
+    final canGenerateAffiliateLink =
+        product['can_generate_affiliate_link'] == true ||
+            product['can_generate_affiliate_link'] == 1 ||
+            product['can_generate_affiliate_link']
+                    ?.toString() ==
+                '1';
+
+    //final affiliateOfferId =
+    //    product['affiliate_offer_id'];        
+
+    final isSelected =
+        _selectedMarketplaceProduct !=
+                null &&
+            _selectedMarketplaceProduct![
+                    'id'] ==
+                product['id'];
+
+    /*void selectProduct() {
+      setState(() {
+        _selectedMarketplaceProduct =
+            Map<String, dynamic>.from(
+          product,
+        );
+      });
+    }*/
+
+    return GestureDetector(
+      onTap: () {
+        final selectedProduct =
+            Map<String, dynamic>.from(product);
+
+        setState(() {
+          _selectedMarketplaceProduct =
+              selectedProduct;
+        });
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                MarketplaceProductDetailsScreen(
+              product: selectedProduct,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding:
+            const EdgeInsets.all(12),
+        decoration:
+            BoxDecoration(
+          color:
+              const Color(0xFF0F172A),
+          borderRadius:
+              BorderRadius.circular(
+            14,
+          ),
+          border: Border.all(
+            color: isSelected
+                ? Colors.lightBlue
+                : Colors.white10,
+            width:
+                isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            // --------------------------------------------------
+            // PRODUCT THUMBNAIL
+            // --------------------------------------------------
+
+            ClipRRect(
+              borderRadius:
+                  BorderRadius.circular(
+                10,
+              ),
+              child:
+                  imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.contain,
+                          errorBuilder:
+                              (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return Container(
+                              width: 100,
+                              height: 100,
+                              color:
+                                  Colors.white10,
+                              child:
+                                  const Icon(
+                                Icons
+                                    .image_not_supported_outlined,
+                                size: 32,
+                                color:
+                                    Colors.white38,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          width: 100,
+                          height: 100,
+                          color:
+                              Colors.white10,
+                          child:
+                              const Icon(
+                            Icons
+                                .image_outlined,
+                            size: 32,
+                            color:
+                                Colors.white38,
+                          ),
+                        ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // --------------------------------------------------
+            // PRODUCT DETAILS
+            // --------------------------------------------------
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+
+                  if (description
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 5,
+                    ),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white70,
+                        fontSize: 13,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 8),
+
+                  // PRICE + COMMISSION
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons
+                            .payments_outlined,
+                        size: 17,
+                        color:
+                            Colors.greenAccent,
+                      ),
+                      const SizedBox(
+                          width: 4),
+                      Text(
+                        _formatCurrency(
+                          price,
+                        ),
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.greenAccent,
+                          fontWeight:
+                              FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+
+                      const SizedBox(
+                          width: 12),
+
+                      const Icon(
+                        Icons.percent,
+                        size: 16,
+                        color:
+                            Colors.orangeAccent,
+                      ),
+                      const SizedBox(
+                          width: 3),
+                      Text(
+                        '${commission.toStringAsFixed(2)}%',
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.orangeAccent,
+                          fontWeight:
+                              FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // --------------------------------------------------
+                  // AFFILIATE PROGRAM
+                  // --------------------------------------------------
+
+                  if (affiliateProgramName.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.verified_outlined,
+                          size: 16,
+                          color: Colors.lightBlueAccent,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            affiliateProgramName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.lightBlueAccent,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Row(
+                      children: [
+                        Icon(
+                          creatorMembershipStatus == 'active'
+                              ? Icons.check_circle_outline
+                              : Icons.info_outline,
+                          size: 15,
+                          color:
+                              creatorMembershipStatus == 'active'
+                                  ? Colors.greenAccent
+                                  : Colors.orangeAccent,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          creatorMembershipStatus == 'active'
+                              ? 'Eligible'
+                              : 'Membership: $creatorMembershipStatus',
+                          style: TextStyle(
+                            color:
+                                creatorMembershipStatus == 'active'
+                                    ? Colors.greenAccent
+                                    : Colors.orangeAccent,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    Row(
+                      children: [
+                        Icon(
+                          canGenerateAffiliateLink
+                              ? Icons.link
+                              : Icons.link_off,
+                          size: 15,
+                          color:
+                              canGenerateAffiliateLink
+                                  ? Colors.greenAccent
+                                  : Colors.white54,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            canGenerateAffiliateLink
+                                ? 'Affiliate link available'
+                                : 'Affiliate link not available yet',
+                            style: TextStyle(
+                              color:
+                                  canGenerateAffiliateLink
+                                      ? Colors.greenAccent
+                                      : Colors.white54,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 10),
+
+                  // SELECT BUTTON
+                  Align(
+                    alignment:
+                        Alignment.centerLeft,
+                    child:
+                        ElevatedButton.icon(
+                      onPressed: () {
+                        final selectedProduct =
+                            Map<String,
+                                dynamic>.from(
+                          product,
+                        );
+
+                        setState(() {
+                          _selectedMarketplaceProduct =
+                              selectedProduct;
+                        });
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ProductPostScreen(
+                              product:
+                                  selectedProduct,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: Icon(
+                        isSelected
+                            ? Icons
+                                .check_circle
+                            : Icons
+                                .touch_app,
+                        size: 17,
+                      ),
+                      label: Text(
+                        isSelected
+                            ? 'Selected'
+                            : 'Promote Product',
+                      ),
+                      style:
+                          ElevatedButton
+                              .styleFrom(
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        minimumSize:
+                            Size.zero,
+                        tapTargetSize:
+                            MaterialTapTargetSize
+                                .shrinkWrap,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // CAMPAIGN CARD
+  // ============================================================
+
+  Widget _buildCampaignCard(
+    dynamic campaign,
+  ) {
+    if (campaign is! Map) {
+      return const SizedBox.shrink();
+    }
+
+    final title =
+        campaign['title']
+                ?.toString() ??
+            'Untitled Campaign';
+
+    final description =
+        campaign['description']
+                ?.toString() ??
+            '';
+
+    final category =
+        campaign['category']
+                ?.toString() ??
+            '';
+
+    final payout =
+        double.tryParse(
+              campaign[
+                        'payout_per_post']
+                    ?.toString() ??
+                  '0',
+            ) ??
+            0;
+
+    final hashtag =
+        campaign[
+                    'required_hashtag']
+                ?.toString() ??
+            '';
+
+    return Container(
+      padding:
+          const EdgeInsets.all(18),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF0F172A),
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
+        border: Border.all(
+          color: Colors.white10,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    fontSize: 17,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              if (category.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets
+                          .symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.purpleAccent
+                            .withValues(
+                      alpha: 0.12,
+                    ),
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                      10,
+                    ),
+                  ),
+                  child: Text(
+                    category,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.purpleAccent,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          if (description
+              .isNotEmpty) ...[
+            const SizedBox(
+              height: 10,
+            ),
+
+            Text(
+              description,
+              maxLines: 3,
+              overflow:
+                  TextOverflow.ellipsis,
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white70,
+                height: 1.4,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+
+          Row(
+            children: [
+              const Icon(
+                Icons
+                    .payments_outlined,
+                size: 20,
+                color:
+                    Colors.greenAccent,
+              ),
+
+              const SizedBox(width: 7),
+
+              Text(
+                _formatCurrency(
+                  payout,
+                ),
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.greenAccent,
+                  fontWeight:
+                      FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+
+              const SizedBox(
+                width: 18,
+              ),
+
+              if (hashtag.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    hashtag,
+                    overflow:
+                        TextOverflow
+                            .ellipsis,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.lightBlue,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // SUBMISSION CARD
+  // ============================================================
+
+  Widget _buildSubmissionCard(
+    dynamic submission,
+  ) {
+    if (submission is! Map) {
+      return const SizedBox.shrink();
+    }
+
+    final title =
+        submission['entry_title']
+                ?.toString() ??
+            'Untitled Submission';
+
+    final status =
+        submission['status']
+                ?.toString() ??
+            '';
+
+    final payout =
+        double.tryParse(
+              submission[
+                        'payout_amount']
+                    ?.toString() ??
+                  '0',
+            ) ??
+            0;
+
+    final submittedAt =
+        submission['submitted_at']
+                ?.toString() ??
+            '';
+
+    final source =
+        submission['source_type']
+                ?.toString() ??
+            '';
+
+    final statusLower =
+        status.toLowerCase();
+
+    Color statusColor;
+
+    if (statusLower ==
+        'approved') {
+      statusColor =
+          Colors.greenAccent;
+    } else if (statusLower ==
+        'rejected') {
+      statusColor =
+          Colors.redAccent;
+    } else {
+      statusColor =
+          Colors.orangeAccent;
+    }
+
+    return Container(
+      padding:
+          const EdgeInsets.all(18),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF0F172A),
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
+        border: Border.all(
+          color: Colors.white10,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    fontSize: 16,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Container(
+                padding:
+                    const EdgeInsets
+                        .symmetric(
+                  horizontal: 9,
+                  vertical: 5,
+                ),
+                decoration:
+                    BoxDecoration(
+                  color: statusColor
+                      .withValues(
+                    alpha: 0.12,
+                  ),
+                  borderRadius:
+                      BorderRadius
+                          .circular(
+                    10,
+                  ),
+                ),
+                child: Text(
+                  status,
+                  style:
+                      TextStyle(
+                    color:
+                        statusColor,
+                    fontSize: 11,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              const Icon(
+                Icons
+                    .payments_outlined,
+                size: 19,
+                color:
+                    Colors.greenAccent,
+              ),
+
+              const SizedBox(width: 6),
+
+              Text(
+                _formatCurrency(
+                  payout,
+                ),
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.greenAccent,
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+
+              if (source.isNotEmpty) ...[
+                const SizedBox(
+                  width: 18,
+                ),
+
+                const Icon(
+                  Icons
+                      .source_outlined,
+                  size: 18,
+                  color:
+                      Colors.white54,
+                ),
+
+                const SizedBox(width: 5),
+
+                Text(
+                  source,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white60,
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          if (submittedAt
+              .isNotEmpty) ...[
+            const SizedBox(height: 8),
+
+            Text(
+              'Submitted: $submittedAt',
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white54,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // EMPTY CARD
+  // ============================================================
+
+  Widget _buildEmptyCard({
+    required IconData icon,
+    required String message,
+  }) {
+    return Container(
+      padding:
+          const EdgeInsets.all(28),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF0F172A),
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
+        border: Border.all(
+          color: Colors.white10,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 42,
+            color:
+                Colors.white38,
+          ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            message,
+            textAlign:
+                TextAlign.center,
+            style:
+                const TextStyle(
+              color:
+                  Colors.white60,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
