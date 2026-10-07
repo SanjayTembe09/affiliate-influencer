@@ -2285,6 +2285,247 @@ Widget _buildAffiliateDetailRow({
         const SizedBox(height: 24),
 
         // ============================================================
+        // AVAILABLE MARKETPLACE PRODUCTS
+        // ============================================================
+
+        _buildSectionTitle(
+          'Available Products',
+          '$_marketplaceTotalProducts',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_isLoadingMarketplaceProducts)
+          const Padding(
+            padding:
+                EdgeInsets.symmetric(
+              vertical: 30,
+            ),
+            child: Center(
+              child:
+                  CircularProgressIndicator(),
+            ),
+          )
+        else if (_marketplaceProducts.isEmpty)
+          _buildEmptyCard(
+            icon: Icons
+                .shopping_bag_outlined,
+            message:
+                'No marketplace products available.',
+          )
+        else
+          ..._marketplaceProducts.map(
+            (product) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildMarketplaceProductCard(
+                product,
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 24),
+
+        // ============================================================
+        // MARKETPLACE PAGINATION
+        // ============================================================
+
+        if (!_isLoadingMarketplaceProducts &&
+            _marketplaceTotalPages > 1) ...[
+          const SizedBox(height: 4),
+
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    (_marketplacePage > 1 &&
+                            !_isChangingMarketplacePage)
+                        ? () {
+                            _loadMarketplaceProducts(
+                              page:
+                                  _marketplacePage -
+                                      1,
+                            );
+                          }
+                        : null,
+                icon: const Icon(
+                  Icons.chevron_left,
+                  size: 20,
+                ),
+                label:
+                    const Text('Previous'),
+              ),
+
+              const SizedBox(width: 16),
+
+              Text(
+                '$_marketplacePage / '
+                '$_marketplaceTotalPages',
+                style:
+                    const TextStyle(
+                  fontWeight:
+                      FontWeight.bold,
+                  color:
+                      Colors.white70,
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              OutlinedButton.icon(
+                onPressed:
+                    (_marketplacePage <
+                                _marketplaceTotalPages &&
+                            !_isChangingMarketplacePage)
+                        ? () {
+                            _loadMarketplaceProducts(
+                              page:
+                                  _marketplacePage +
+                                      1,
+                            );
+                          }
+                        : null,
+                icon: const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                ),
+                label:
+                    const Text('Next'),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          if (_isChangingMarketplacePage)
+            const Center(
+              child: Padding(
+                padding:
+                    EdgeInsets.only(top: 4),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child:
+                      CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            ),
+        ],
+
+        const SizedBox(height: 24),
+
+        // ======================================================
+        // AVAILABLE CAMPAIGNS
+        // ======================================================
+
+        _buildSectionTitle(
+          'Available Campaigns',
+          '$_totalCampaigns',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_campaigns.isEmpty)
+          _buildEmptyCard(
+            icon:
+                Icons.campaign_outlined,
+            message:
+                'No active campaigns available.',
+          )
+        else ...[
+          ..._campaigns.map(
+            (campaign) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildCampaignCard(
+                campaign,
+              ),
+            ),
+          ),
+
+          _buildPaginationControls(
+            currentPage:
+                _campaignPage,
+            totalPages:
+                _campaignTotalPages,
+            isLoading:
+                _isChangingCampaignPage,
+            onPrevious: () {
+              _changeCampaignPage(
+                _campaignPage - 1,
+              );
+            },
+            onNext: () {
+              _changeCampaignPage(
+                _campaignPage + 1,
+              );
+            },
+          ),
+        ],
+
+        const SizedBox(height: 20),
+
+        // ======================================================
+        // MY SUBMISSIONS
+        // ======================================================
+
+        _buildSectionTitle(
+          'My Submissions',
+          '$_totalSubmissions',
+        ),
+
+        const SizedBox(height: 12),
+
+        if (_submissions.isEmpty)
+          _buildEmptyCard(
+            icon: Icons.history,
+            message:
+                'You have no submissions yet.',
+          )
+        else ...[
+          ..._submissions.map(
+            (submission) => Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 12,
+              ),
+              child:
+                  _buildSubmissionCard(
+                submission,
+              ),
+            ),
+          ),
+
+          _buildPaginationControls(
+            currentPage:
+                _submissionPage,
+            totalPages:
+                _submissionTotalPages,
+            isLoading:
+                _isChangingSubmissionPage,
+            onPrevious: () {
+              _changeSubmissionPage(
+                _submissionPage - 1,
+              );
+            },
+            onNext: () {
+              _changeSubmissionPage(
+                _submissionPage + 1,
+              );
+            },
+          ),
+        ],
+
         const SizedBox(height: 30),
       ],
     );
@@ -3574,138 +3815,130 @@ Widget _buildAffiliateDetailRow({
           runSpacing: 16,
           children: [
             // --------------------------------------------------
-            // --------------------------------------------------
-            // AFFILIATE EARNINGS
+            // TOTAL CAMPAIGNS
             // --------------------------------------------------
 
             SizedBox(
-              width: width,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.payments_outlined,
-                            size: 28,
-                          ),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'Affiliate Earnings',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .campaign_outlined,
+                title: 'Campaigns',
+                value:
+                    '$_totalCampaigns',
+              ),
+            ),
 
-                      const SizedBox(height: 16),
+            // --------------------------------------------------
+            // TOTAL SUBMISSIONS
+            // --------------------------------------------------
 
-                      // TOTAL EARNED
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total Earned',
-                            style: TextStyle(
-                              fontSize: 15,
-                            ),
-                          ),
-                          Text(
-                            _isLoadingAffiliateEarnings
-                                ? 'Loading...'
-                                : '$_affiliateCurrency '
-                                    '${_affiliateTotalEarned.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .assignment_outlined,
+                title:
+                    'Submissions',
+                value:
+                    '$_totalSubmissions',
+              ),
+            ),
 
-                      const Divider(height: 24),
+            // --------------------------------------------------
+            // TOTAL APPROVED EARNINGS
+            // --------------------------------------------------
 
-                      // PENDING
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Pending',
-                            style: TextStyle(
-                              fontSize: 15,
-                            ),
-                          ),
-                          Text(
-                            '$_affiliateCurrency '
-                            '${_affiliatePending.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const Divider(height: 24),
-
-                      // AVAILABLE
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Available',
-                            style: TextStyle(
-                              fontSize: 15,
-                            ),
-                          ),
-                          Text(
-                            '$_affiliateCurrency '
-                            '${_affiliateAvailable.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const Divider(height: 24),
-
-                      // PAID
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Paid',
-                            style: TextStyle(
-                              fontSize: 15,
-                            ),
-                          ),
-                          Text(
-                            '$_affiliateCurrency '
-                            '${_affiliatePaid.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .account_balance_wallet_outlined,
+                title:
+                    'Approved Earnings',
+                value:
+                    _formatCurrency(
+                  _totalEarnings,
                 ),
               ),
             ),
             // --------------------------------------------------
+            // AFFILIATE TOTAL EARNED
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .payments_outlined,
+                title:
+                    'Affiliate Total Earned',
+                value:
+                    _isLoadingAffiliateEarnings
+                    ? 'Loading...'
+                    : '$_affiliateCurrency '
+                      '${_affiliateTotalEarned.toStringAsFixed(2)}',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // AFFILIATE PENDING
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .hourglass_empty_outlined,
+                title:
+                    'Affiliate Pending',
+                value:
+                    '$_affiliateCurrency '
+                    '${_affiliatePending.toStringAsFixed(2)}',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // AFFILIATE AVAILABLE
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                    .account_balance_wallet_outlined,
+                title:
+                    'Affiliate Available',
+                value:
+                    '$_affiliateCurrency '
+                    '${_affiliateAvailable.toStringAsFixed(2)}',
+              ),
+            ),
+
+            // --------------------------------------------------
+            // AFFILIATE PAID
+            // --------------------------------------------------
+
+            SizedBox(
+              width: cardWidth,
+              child:
+                  _buildStatCard(
+                icon: Icons
+                   .check_circle_outline,
+                title:
+                    'Affiliate Paid',
+                value:
+                    '$_affiliateCurrency '
+                    '${_affiliatePaid.toStringAsFixed(2)}',
+              ),
+            ),
+                        // --------------------------------------------------
             // REQUEST AFFILIATE PAYOUT
             // --------------------------------------------------
 
