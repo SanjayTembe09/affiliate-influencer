@@ -52,6 +52,8 @@ int _affiliateOfferPage = 1;
 int _affiliateOfferTotalPages = 1;
 int _affiliateOfferTotal = 0;
 
+final int _affiliateOffersLoadLimit = 100;
+
 final int _affiliateOfferPageLimit = 10;
 
 
@@ -70,10 +72,18 @@ final int _affiliateOfferPageLimit = 10;
   int _affiliateProgramPage = 1;
   int _affiliateProgramTotalPages = 1;
   int _affiliateProgramTotal = 0;
+  String _affiliateProgramsDiagnostic = 'Not checked yet';
 
-  final int _affiliateProgramPageLimit = 10;
+  final int _affiliateProgramPageLimit = 3;
 
   List<dynamic> _myAffiliatePrograms = [];
+
+  int? _selectedAffiliateProgramId;
+  Map<int, List<dynamic>> _affiliateOffersByProgram = {};
+
+  // Offers belonging to this influencer's joined programs.
+  List<dynamic> _myOffers = [];
+  bool _isLoadingMyOffers = false;
 
 // ============================================================
 // AFFILIATE EARNINGS
@@ -122,7 +132,9 @@ final int _affiliateOfferPageLimit = 10;
     _loadDashboard();
     _loadMarketplaceProducts();
     _loadAffiliateOffers();
+    _loadAffiliateOffersForPrograms();
     _loadAffiliatePrograms();
+    _loadMyOffers();
     _loadAffiliateEarnings();
   }
 
@@ -135,7 +147,9 @@ final int _affiliateOfferPageLimit = 10;
       _loadDashboard(),
       _loadMarketplaceProducts(),
        _loadAffiliateOffers(),
+      _loadAffiliateOffersForPrograms(),
       _loadAffiliatePrograms(),
+      _loadMyOffers(),
       _loadAffiliateEarnings(),
     ]);
   }
@@ -262,6 +276,166 @@ Future<void> _loadAffiliateOffers({
 
 
   // ============================================================
+  // LOAD AFFILIATE OFFERS FOR PROGRAMS
+  // ============================================================
+
+  Future<void> _loadAffiliateOffersForPrograms() async {
+    setState(() {
+      _isLoadingAffiliateOffers = true;
+    });
+
+    try {
+      final result = await ApiService.getAffiliateOffers(
+        page: 1,
+        limit: _affiliateOffersLoadLimit,
+      );
+
+      if (!mounted) return;
+
+      final offers = result['offers'] is List
+          ? List<dynamic>.from(result['offers'])
+          : <dynamic>[];
+
+      final Map<int, List<dynamic>> groupedOffers = {};
+
+      for (final offer in offers) {
+        if (offer is! Map) continue;
+
+        final programId = int.tryParse(
+          offer['program_id']?.toString() ?? '',
+        );
+
+        if (programId == null) continue;
+
+        groupedOffers.putIfAbsent(programId, () => []);
+        groupedOffers[programId]!.add(
+          Map<String, dynamic>.from(offer),
+        );
+      }
+
+      setState(() {
+        _affiliateOffersByProgram = groupedOffers;
+        _affiliateOfferTotal = offers.length;
+        _isLoadingAffiliateOffers = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingAffiliateOffers = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load Affiliate Offers: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+
+  // ============================================================
+  // LOAD MY OFFERS: offers from active/approved memberships only
+  // ============================================================
+  Future<void> _loadMyOffers() async {
+    if (mounted) {
+      setState(() => _isLoadingMyOffers = true);
+    }
+
+    try {
+      final membershipsResult =
+          await ApiService.getMyAffiliatePrograms();
+
+      final rawMemberships = membershipsResult['programs'];
+      final eligibleProgramIds = <int>{};
+
+      if (rawMemberships is List) {
+        for (final item in rawMemberships) {
+          if (item is! Map) continue;
+
+          final status = (item['membership_status'] ??
+                  item['status'] ??
+                  '')
+              .toString()
+              .toLowerCase();
+
+          if (status != 'active' && status != 'approved') {
+            continue;
+          }
+
+          final rawId = item['program_id'] ??
+              item['affiliate_program_id'] ??
+              item['id'];
+
+          final programId = int.tryParse(rawId.toString());
+          if (programId != null) {
+            eligibleProgramIds.add(programId);
+          }
+        }
+      }
+
+      final matchedOffers = <dynamic>[];
+
+      if (eligibleProgramIds.isNotEmpty) {
+        var page = 1;
+        var totalPages = 1;
+
+        do {
+          final result = await ApiService.getAffiliateOffers(
+            page: page,
+            limit: _affiliateOffersLoadLimit,
+          );
+
+          final rawOffers = result['offers'];
+          if (rawOffers is List) {
+            for (final offer in rawOffers) {
+              if (offer is! Map) continue;
+
+              final rawProgramId = offer['program_id'];
+              final programId =
+                  int.tryParse(rawProgramId.toString());
+
+              if (programId != null &&
+                  eligibleProgramIds.contains(programId)) {
+                matchedOffers.add(
+                  Map<String, dynamic>.from(offer),
+                );
+              }
+            }
+          }
+
+          final parsedPages =
+              int.tryParse('${result['total_pages']}');
+
+          totalPages = parsedPages != null && parsedPages > 0
+              ? parsedPages
+              : 1;
+
+          page++;
+        } while (page <= totalPages);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _myOffers = matchedOffers;
+      });
+    } catch (e) {
+      debugPrint('Failed to load My Offers: $e');
+
+      if (mounted) {
+        setState(() => _myOffers = []);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMyOffers = false);
+      }
+    }
+  }
+
+  // ============================================================
   // CREATE SOCIAL PUBLISHER PRODUCT POST
   // ============================================================
 
@@ -359,6 +533,9 @@ Future<void> _loadAffiliateOffers({
       final programsResult = results[0];
       final membershipsResult = results[1];
 
+      debugPrint('DISCOVERY PROGRAMS API RESPONSE: $programsResult');
+      debugPrint('DISCOVERY PROGRAMS COUNT: ${(programsResult['programs'] is List) ? (programsResult['programs'] as List).length : 'NOT A LIST'}');
+
       debugPrint(
         'MY AFFILIATE PROGRAMS RESPONSE: $membershipsResult',
       );
@@ -411,6 +588,10 @@ Future<void> _loadAffiliateOffers({
 
       setState(() {
         _affiliatePrograms = programs;
+        _affiliateProgramsDiagnostic =
+            'API OK | programs list: ${programs.length}'
+            ' | total: ${programsResult['total']}'
+            ' | response keys: ${programsResult.keys.join(', ')}';
 
         _myAffiliatePrograms = memberships;
 
@@ -434,6 +615,7 @@ Future<void> _loadAffiliateOffers({
       if (!mounted) return;
 
       setState(() {
+        _affiliateProgramsDiagnostic = 'API ERROR: $e';
         _isLoadingAffiliatePrograms = false;
       });
 
@@ -2264,7 +2446,7 @@ Widget _buildAffiliateDetailRow({
         // AFFILIATE PROGRAMS
         // ============================================================
 
-        _buildAffiliateProgramsSection(),
+
 
         const SizedBox(height: 24),
 
@@ -2272,8 +2454,12 @@ Widget _buildAffiliateDetailRow({
         // MY AFFILIATE PROGRAMS
         // ============================================================
 
-        _buildMyAffiliateProgramsSection(),
 
+
+        const SizedBox(height: 24),
+
+        // MY OFFERS: only offers from joined programs
+        _buildMyOffersSection(),
         const SizedBox(height: 24),
 
         // ============================================================
@@ -2426,16 +2612,237 @@ Widget _buildAffiliateDetailRow({
   }
 
   // ============================================================
+  // MY OFFERS SECTION
+  // ============================================================
+  Widget _buildMyOffersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'My Offers',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingMyOffers)
+          const Center(child: CircularProgressIndicator())
+        else if (_myOffers.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              "You have no offers from active or approved memberships yet.",
+            ),
+          )
+        else
+          ..._myOffers.map((offer) {
+            if (offer is! Map) {
+              return const SizedBox.shrink();
+            }
+
+            return _buildAffiliateOfferCard(
+              Map<String, dynamic>.from(offer),
+            );
+          }),
+      ],
+    );
+  }
+
+  // ============================================================
   // AFFILIATE OFFERS SECTION
   // ============================================================
 
   Widget _buildAffiliateOffersSection() {
+    if (_selectedAffiliateProgramId == null) {
+      return Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle(
+            'Affiliate Offers',
+            '$_affiliateProgramTotal',
+          ),
+
+          const SizedBox(height: 8),
+          SelectableText(
+            'DIAGNOSTIC: $_affiliateProgramsDiagnostic',
+            style: const TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+
+          if (_isLoadingAffiliatePrograms)
+            const Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: 30,
+              ),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_affiliatePrograms.isEmpty)
+            _buildEmptyCard(
+              icon: Icons.business_outlined,
+              message: 'No Affiliate Programs available.',
+            )
+          else
+            ..._affiliatePrograms.map(
+              (program) {
+                return Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: 12,
+                  ),
+                  child: _buildAffiliateProgramCard(
+                    program,
+                  ),
+                );
+              },
+            ),
+
+          if (_affiliateProgramTotalPages > 1)
+            _buildPaginationControls(
+              currentPage: _affiliateProgramPage,
+              totalPages: _affiliateProgramTotalPages,
+              isLoading: _isChangingAffiliateProgramPage,
+              onPrevious: () {
+                _changeAffiliateProgramPage(
+                  _affiliateProgramPage - 1,
+                );
+              },
+              onNext: () {
+                _changeAffiliateProgramPage(
+                  _affiliateProgramPage + 1,
+                );
+              },
+            ),
+        ],
+      );
+    }
+
+    final selectedProgramId =
+        _selectedAffiliateProgramId!;
+
+    final selectedProgram = _affiliatePrograms
+        .where(
+          (program) =>
+              program is Map &&
+              int.tryParse(
+                    program['id']?.toString() ?? '',
+                  ) ==
+                  selectedProgramId,
+        )
+        .cast<dynamic>()
+        .toList();
+
+    final offers =
+        _affiliateOffersByProgram[selectedProgramId] ??
+            <dynamic>[];
+
+    String programName =
+        'Affiliate Program';
+
+    String brandName = '';
+
+    if (selectedProgram.isNotEmpty &&
+        selectedProgram.first is Map) {
+      final program =
+          Map<String, dynamic>.from(
+        selectedProgram.first as Map,
+      );
+
+      programName =
+          program['program_name']?.toString().trim().isNotEmpty ==
+                  true
+              ? program['program_name'].toString()
+              : 'Affiliate Program';
+
+      brandName =
+          program['brand_name']?.toString() ?? '';
+    } else if (offers.isNotEmpty &&
+        offers.first is Map) {
+      final firstOffer =
+          Map<String, dynamic>.from(
+        offers.first as Map,
+      );
+
+      programName =
+          firstOffer['program_name']?.toString().trim().isNotEmpty ==
+                  true
+              ? firstOffer['program_name'].toString()
+              : 'Affiliate Program';
+
+      brandName =
+          firstOffer['program_brand_name']?.toString() ??
+              firstOffer['brand_name']?.toString() ??
+              '';
+    }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(
-          'Affiliate Offers',
-          _affiliateOfferTotal.toString(),
+        Row(
+          children: [
+            Expanded(
+              child: _buildSectionTitle(
+                'Affiliate Offers',
+                '${offers.length}',
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 8),
+
+        OutlinedButton.icon(
+          onPressed: () {
+            setState(() {
+              _selectedAffiliateProgramId = null;
+            });
+          },
+          icon: const Icon(
+            Icons.arrow_back,
+          ),
+          label: const Text(
+            'Back to Affiliate Programs',
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                if (brandName.isNotEmpty)
+                  Text(
+                    brandName,
+                    style:
+                        Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(
+                              fontWeight:
+                                  FontWeight.w600,
+                            ),
+                  ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  programName,
+                  style:
+                      Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                ),
+              ],
+            ),
+          ),
         ),
 
         const SizedBox(height: 12),
@@ -2449,13 +2856,14 @@ Widget _buildAffiliateDetailRow({
               child: CircularProgressIndicator(),
             ),
           )
-        else if (_affiliateOffers.isEmpty)
+        else if (offers.isEmpty)
           _buildEmptyCard(
             icon: Icons.local_offer_outlined,
-            message: 'No Affiliate Offers available.',
+            message:
+                'No offers available for this program.',
           )
         else
-          ..._affiliateOffers.map(
+          ...offers.map(
             (offer) {
               if (offer is! Map) {
                 return const SizedBox.shrink();
@@ -2471,30 +2879,9 @@ Widget _buildAffiliateDetailRow({
               );
             },
           ),
-
-        if (_affiliateOfferTotalPages > 1)
-          _buildPaginationControls(
-            currentPage: _affiliateOfferPage,
-            totalPages: _affiliateOfferTotalPages,
-            isLoading: _isChangingAffiliateOfferPage,
-            onPrevious: () {
-              _loadAffiliateOffers(
-                page: _affiliateOfferPage - 1,
-              );
-            },
-            onNext: () {
-              _loadAffiliateOffers(
-                page: _affiliateOfferPage + 1,
-              );
-            },
-          ),
       ],
     );
   }
-
-  // ============================================================
-  // AFFILIATE OFFER CARD
-  // ============================================================
 
   Widget _buildAffiliateOfferCard(
     Map<String, dynamic> offer,
@@ -3329,6 +3716,25 @@ Widget _buildAffiliateDetailRow({
             // --------------------------------------------------
             // ACTIONS
             // --------------------------------------------------
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _selectedAffiliateProgramId = programId;
+                  });
+                },
+                icon: const Icon(
+                  Icons.local_offer_outlined,
+                ),
+                label: const Text(
+                  'View Offers',
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
 
             Row(
               children: [
@@ -4770,6 +5176,7 @@ Widget _buildAffiliateDetailRow({
     );
   }
 }
+
 
 
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:flutter/services.dart';
 import 'api_service.dart';
 
 class OfferPostScreen extends StatefulWidget {
@@ -395,6 +395,62 @@ class _OfferPostScreenState
     );
   }
 
+  
+  Widget _buildAffiliateLinkSection() {
+    final String url =
+        _offerPost?['affiliate_url']?.toString() ??
+            widget.affiliateUrl;
+
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Affiliate Link',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SelectableText(url),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: url.trim().isEmpty
+                    ? null
+                    : () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: url),
+                        );
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Affiliate link copied.',
+                            ),
+                          ),
+                        );
+                      },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy Link'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
   Widget _buildPostPreview() {
     final post = _offerPost!;
 
@@ -409,10 +465,6 @@ class _OfferPostScreenState
     final String imageUrl =
         post['image_url']?.toString() ??
             '';
-
-    final String affiliateUrl =
-        post['affiliate_url']?.toString() ??
-            widget.affiliateUrl;
 
     return Card(
       elevation: 1,
@@ -486,19 +538,6 @@ class _OfferPostScreenState
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'Affiliate Link',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            SelectableText(
-              affiliateUrl,
-              style: const TextStyle(
-                fontSize: 13,
-              ),
-            ),
           ],
         ),
       ),
@@ -643,13 +682,6 @@ class _OfferPostScreenState
     final bool postCreated =
         _offerPost != null;
 
-    final int selectedCount = [
-      _publishFacebook,
-      _publishInstagram,
-      _publishInstagramStory,
-      _publishTikTok,
-    ].where((value) => value).length;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Offer Post'),
@@ -661,6 +693,9 @@ class _OfferPostScreenState
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
+              _buildAffiliateLinkSection(),
+              const SizedBox(height: 16),   
+
               if (!postCreated)
                 _buildOfferPreview(),
 
@@ -676,7 +711,7 @@ class _OfferPostScreenState
                 ),
               ],
 
-              if (postCreated) ...[
+              /*if (postCreated) ...[
                 _buildPostPreview(),
                 const SizedBox(height: 20),
                 _buildPlatformSelection(),
@@ -695,7 +730,36 @@ class _OfferPostScreenState
                           ? null
                           : _publishOfferPost,
                 ),
+              ], */
+
+              
+              if (postCreated) ...[
+                _buildPostPreview(),
+                const SizedBox(height: 16),
+
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Offer Post publishing is currently '
+                            'disabled. Your affiliate link remains '
+                            'available above and can be copied '
+                            'whenever you need it.',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
+
 
               if (_errorMessage != null) ...[
                 const SizedBox(height: 16),

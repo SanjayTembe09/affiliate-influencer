@@ -108,9 +108,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
     final followers = int.tryParse(followersText);
 
-    if (followers == null || followers < 0) {
+    if (followers == null || followers < 2000) {
       setState(() {
-        _errorMessage = 'Please enter a valid follower count.';
+        _errorMessage = 'Creator registration requires at least 2000 followers.';
       });
       return;
     }
